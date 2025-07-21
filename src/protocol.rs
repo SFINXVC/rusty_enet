@@ -1,10 +1,8 @@
 //! ENet protocol definitions
-//! 
+//!
 //! This module contains all the protocol structures and constants used by ENet
 //! for network communication. All structures are packed and binary-compatible
 //! with the original C implementation.
-
-/// Protocol constants
 
 pub mod constants {
     pub const MINIMUM_MTU: u32 = 576;
@@ -18,7 +16,6 @@ pub mod constants {
     pub const MAXIMUM_FRAGMENT_COUNT: u32 = 1024 * 1024;
 }
 
-/// Protocol command types
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolCommand {
@@ -41,7 +38,6 @@ impl ProtocolCommand {
     pub const COUNT: u8 = 13;
     pub const MASK: u8 = 0x0F;
 
-    /// Convert from u8 to ProtocolCommand
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::None),
@@ -62,20 +58,18 @@ impl ProtocolCommand {
     }
 }
 
-/// Protocol flags
 pub mod flags {
     pub const COMMAND_FLAG_ACKNOWLEDGE: u8 = 1 << 7;
     pub const COMMAND_FLAG_UNSEQUENCED: u8 = 1 << 6;
-    
+
     pub const HEADER_FLAG_COMPRESSED: u16 = 1 << 14;
     pub const HEADER_FLAG_SENT_TIME: u16 = 1 << 15;
     pub const HEADER_FLAG_MASK: u16 = HEADER_FLAG_COMPRESSED | HEADER_FLAG_SENT_TIME;
-    
+
     pub const HEADER_SESSION_MASK: u16 = 3 << 12;
     pub const HEADER_SESSION_SHIFT: u16 = 12;
 }
 
-/// Protocol header structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolHeader {
@@ -83,7 +77,6 @@ pub struct ProtocolHeader {
     pub sent_time: u16,
 }
 
-/// Protocol command header structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolCommandHeader {
@@ -92,7 +85,6 @@ pub struct ProtocolCommandHeader {
     pub reliable_sequence_number: u16,
 }
 
-/// Protocol acknowledge structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolAcknowledge {
@@ -101,7 +93,6 @@ pub struct ProtocolAcknowledge {
     pub received_sent_time: u16,
 }
 
-/// Protocol connect structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolConnect {
@@ -121,7 +112,6 @@ pub struct ProtocolConnect {
     pub data: u32,
 }
 
-/// Protocol verify connect structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolVerifyConnect {
@@ -140,7 +130,6 @@ pub struct ProtocolVerifyConnect {
     pub connect_id: u32,
 }
 
-/// Protocol bandwidth limit structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolBandwidthLimit {
@@ -149,7 +138,6 @@ pub struct ProtocolBandwidthLimit {
     pub outgoing_bandwidth: u32,
 }
 
-/// Protocol throttle configure structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolThrottleConfigure {
@@ -159,7 +147,6 @@ pub struct ProtocolThrottleConfigure {
     pub packet_throttle_deceleration: u32,
 }
 
-/// Protocol disconnect structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolDisconnect {
@@ -167,14 +154,12 @@ pub struct ProtocolDisconnect {
     pub data: u32,
 }
 
-/// Protocol ping structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolPing {
     pub header: ProtocolCommandHeader,
 }
 
-/// Protocol send reliable structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolSendReliable {
@@ -182,7 +167,6 @@ pub struct ProtocolSendReliable {
     pub data_length: u16,
 }
 
-/// Protocol send unreliable structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolSendUnreliable {
@@ -191,7 +175,6 @@ pub struct ProtocolSendUnreliable {
     pub data_length: u16,
 }
 
-/// Protocol send unsequenced structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolSendUnsequenced {
@@ -200,7 +183,6 @@ pub struct ProtocolSendUnsequenced {
     pub data_length: u16,
 }
 
-/// Protocol send fragment structure
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct ProtocolSendFragment {
@@ -213,7 +195,6 @@ pub struct ProtocolSendFragment {
     pub fragment_offset: u32,
 }
 
-/// Main protocol enum - replaces the C union with a type-safe enum
 #[derive(Debug, Clone, Copy)]
 pub enum Protocol {
     Header(ProtocolCommandHeader),
@@ -230,8 +211,15 @@ pub enum Protocol {
     ThrottleConfigure(ProtocolThrottleConfigure),
 }
 
+impl Default for Protocol {
+    fn default() -> Self {
+        Self::Header(ProtocolCommandHeader {
+            command: 0, channel_id: 0, reliable_sequence_number: 0
+        })
+    }
+}
+
 impl Protocol {
-    /// Get the command header from any protocol variant
     pub fn header(&self) -> &ProtocolCommandHeader {
         match self {
             Protocol::Header(header) => header,
@@ -249,11 +237,50 @@ impl Protocol {
         }
     }
 
-    /// Get the protocol command type
+    pub fn header_mut(&mut self) -> &mut ProtocolCommandHeader {
+        match self {
+            Protocol::Header(header) => header,
+            Protocol::Acknowledge(ack) => &mut ack.header,
+            Protocol::Connect(conn) => &mut conn.header,
+            Protocol::VerifyConnect(verify) => &mut verify.header,
+            Protocol::Disconnect(disc) => &mut disc.header,
+            Protocol::Ping(ping) => &mut ping.header,
+            Protocol::SendReliable(reliable) => &mut reliable.header,
+            Protocol::SendUnreliable(unreliable) => &mut unreliable.header,
+            Protocol::SendUnsequenced(unsequenced) => &mut unsequenced.header,
+            Protocol::SendFragment(fragment) => &mut fragment.header,
+            Protocol::BandwidthLimit(bandwidth) => &mut bandwidth.header,
+            Protocol::ThrottleConfigure(throttle) => &mut throttle.header,
+        }
+    }
+
     pub fn command(&self) -> Option<ProtocolCommand> {
         ProtocolCommand::from_u8(self.header().command & ProtocolCommand::MASK)
     }
 }
+
+pub fn command_size(command_number: u8) -> usize {
+    use std::mem;
+
+    match command_number {
+        0 => 0,
+        1 => mem::size_of::<ProtocolAcknowledge>(),
+        2 => mem::size_of::<ProtocolConnect>(),
+        3 => mem::size_of::<ProtocolVerifyConnect>(),
+        4 => mem::size_of::<ProtocolDisconnect>(),
+        5 => mem::size_of::<ProtocolPing>(),
+        6 => mem::size_of::<ProtocolSendReliable>(),
+        7 => mem::size_of::<ProtocolSendUnreliable>(),
+        8 => mem::size_of::<ProtocolSendFragment>(),
+        9 => mem::size_of::<ProtocolSendUnsequenced>(),
+        10 => mem::size_of::<ProtocolBandwidthLimit>(),
+        11 => mem::size_of::<ProtocolThrottleConfigure>(),
+        12 => mem::size_of::<ProtocolSendFragment>(),
+        _ => 0,
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {
@@ -262,7 +289,6 @@ mod tests {
 
     #[test]
     fn test_struct_sizes() {
-        // Verify that struct sizes match expectations for binary compatibility
         assert_eq!(mem::size_of::<ProtocolHeader>(), 4);
         assert_eq!(mem::size_of::<ProtocolCommandHeader>(), 4);
         assert_eq!(mem::size_of::<ProtocolPing>(), 4);
@@ -273,7 +299,10 @@ mod tests {
     #[test]
     fn test_protocol_command_conversion() {
         assert_eq!(ProtocolCommand::from_u8(0), Some(ProtocolCommand::None));
-        assert_eq!(ProtocolCommand::from_u8(1), Some(ProtocolCommand::Acknowledge));
+        assert_eq!(
+            ProtocolCommand::from_u8(1),
+            Some(ProtocolCommand::Acknowledge)
+        );
         assert_eq!(ProtocolCommand::from_u8(255), None);
     }
 

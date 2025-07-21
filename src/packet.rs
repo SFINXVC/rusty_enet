@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 pub mod constants {
     pub const PACKET_FLAG_RELIABLE: u32 = 1 << 0;
     pub const PACKET_FLAG_UNSEQUENCED: u32 = 1 << 1;
@@ -6,41 +8,74 @@ pub mod constants {
     pub const PACKET_FLAG_SENT: u32 = 1 << 8;
 }
 
-#[derive(Default)]
-pub struct Packet {
+#[derive(Copy)]
+pub struct Packet<'a> {
     pub ref_count: usize,
     pub flags: u32,
-    pub data: Vec<u8>,
+    pub data: &'a [u8],
     pub data_length: usize, // prob not needed cus Vec<u8> but oh well
     pub free_callback: Option<()>, // this is rust llol
     pub user_data: Option<()>, // void pointer, maybe vec<u8> would do?
 }
 
-impl Packet {
-    pub fn create(data: &Vec<u8>, flags: u32) -> Self {
-        let mut pck = Self::default();
-        if (flags & constants::PACKET_FLAG_NO_ALLOCATE) == 0 {
-            // semi useless flag ;w;
-            pck.data = data.clone();
-        } else {
-            pck.data = data.clone();
+impl<'a> Default for Packet<'a> {
+    fn default() -> Self {
+        Self {
+            ref_count: 0,
+            flags: constants::PACKET_FLAG_RELIABLE,
+            data: &[],
+            data_length: 0,
+            free_callback: None,
+            user_data: None
         }
+    }
+}
 
-        pck.ref_count = 0;
-        pck.flags = flags;
-        pck.data_length = data.len();
-        pck.user_data = None;
+impl<'a> Clone for Packet<'a> {
+    fn clone(&self) -> Self {
+        Self {
+            ref_count: self.ref_count,
+            flags: self.flags,
+            data: self.data.clone(),
+            data_length: self.data_length,
+            free_callback: self.free_callback,
+            user_data: self.user_data,
+        }
+    }
+}
 
-        pck
+impl<'a> Packet<'a> {
+    pub fn create(data: &'a [u8], flags: u32) -> Self {
+        // let data_thing = if (flags & constants::PACKET_FLAG_NO_ALLOCATE) != 0 {
+        //     data
+        // } else {
+        //     data.clone()
+        // };
+
+        Self {
+            ref_count: 0,
+            flags,
+            data_length: data.len(),
+            data: data,
+            free_callback: None,
+            user_data: None,
+        }
     }
 
     pub fn resize(&mut self, data_length: usize) {
-        if data_length <= self.data_length || self.flags & constants::PACKET_FLAG_NO_ALLOCATE == 0 {
+        let no_allocate = self.flags & constants::PACKET_FLAG_NO_ALLOCATE != 0;
+
+        if no_allocate {
+            // if data_length > self.data.len() {
+            //     panic!("Cannot resize beyond current length with PACKET_FLAG_NO_ALLOCATE set");
+            // }
+
+            self.data_length = data_length;
+        } else {
+            // welp this was a sacrifice for copy...
+            // self.data.to_mut().resize(data_length, 0);
             self.data_length = data_length;
         }
-
-        self.data.resize(data_length, 0);
-        self.data_length = data_length;
     }
 }
 
@@ -100,5 +135,15 @@ mod tests {
     #[test]
     fn test_crc32() {
         assert_eq!(crc32(&vec![vec![0u8, 0, 1], vec![0, 1, 1]]), 1734526737);
+    }
+
+    #[test]
+    fn create_packet() {
+        let data = b"asdf".to_vec();
+        let pck = Packet::create(&data, constants::PACKET_FLAG_RELIABLE | constants::PACKET_FLAG_NO_ALLOCATE);
+
+        assert_eq!(pck.data, data);
+        assert_eq!(pck.data_length, data.len());
+        assert_eq!(pck.flags, constants::PACKET_FLAG_RELIABLE | constants::PACKET_FLAG_NO_ALLOCATE);
     }
 }
