@@ -1,5 +1,12 @@
 pub mod protocol;
 pub mod packet;
+pub mod range_coder;
+pub mod channel;
+pub mod event;
+pub mod command;
+pub mod compress;
+pub mod host;
+pub mod peer;
 
 pub const VERSION_MAJOR: u8 = 1;
 pub const VERSION_MINOR: u8 = 3;
